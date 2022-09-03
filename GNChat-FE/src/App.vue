@@ -1,0 +1,174 @@
+<script setup>
+import { onMounted, ref, watch, watchEffect } from 'vue'
+import Message from './Message.vue'
+import axios from 'axios'
+import { ElScrollbar } from 'element-plus';
+
+let username = ref('')
+let user_uuid = ref('')
+
+let api_host = "http://localhost:5000"
+
+let msg_list = ref([])
+
+let msg_input = ref('')
+let username_input = ref('')
+let logined = ref(false)
+
+
+async function user_login() {
+  try {
+    const response = await axios.post(api_host + "/gnchat/api/login", {
+      "username": username_input.value
+    })
+    console.log(response)
+
+    if (response.data.code == '0001') {
+      alert('请检查用户名的输入是否合法')
+    }
+    if (response.data.code == '0000') {
+      username.value = response.data.data.username
+      user_uuid.value = response.data.data.user_uuid
+      logined.value = true
+    }
+
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+function format_message(msgs) {
+  msgs.forEach((v, index) => 
+    msgs[index].is_self = (msgs[index].owner_uuid == user_uuid.value ? true : false)
+  )
+  console.log(msgs)
+  return msgs
+}
+
+
+async function send_message() {
+  try {
+    const response = await axios.post(api_host + "/gnchat/api/pmsg", {
+      "user_uuid": user_uuid.value,
+      "content": msg_input.value
+    })
+    console.log(response)
+
+    if (response.data.code == '0000') {
+      console.log("msg send ok")
+
+      msg_input.value = ""
+    }
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+const scrollbarRef = ref()
+
+async function get_message() {
+  try {
+    const response = await axios.post(api_host + "/gnchat/api/gmsg", {
+      "user_uuid": user_uuid.value,
+    })
+    console.log(response)
+
+    if (response.data.code == '0000') {
+      let msg = response.data.data.reverse()
+        msg = format_message(msg)
+        msg_list.value = [...msg_list.value.concat(msg)]
+        console.log(scrollbarRef.value.wrap)
+        // scrollbarRef.value.setScrollTop(scrollbarRef.value.maxHeight)
+        
+      } else {
+        console.error(response)
+      }
+    } catch (error) {
+      console.error(error)
+    }
+}
+ 
+
+async function get_history_message() {
+  try {
+    const response = await axios.post(api_host + "/gnchat/api/gmsg", {
+      "user_uuid": user_uuid.value,
+      "count": 20,
+      "msg_time": msg_list.value.length == 0 ? (new Date()).valueOf() / 1000 : msg_list.value[0].send_time
+    })
+
+    if (response.data.code == '0000') {
+      let msg = response.data.data.reverse()
+      msg = format_message(msg)
+      msg_list.value = [...msg.concat(msg_list.value)]
+    } else {
+      console.error(response)
+    }
+  } catch(error) {
+    console.log(error)
+  }
+}
+
+const stop = watchEffect(() => logined.value? setInterval(get_message, 1000): null)
+onMounted(() => logined.value? stop(): null)
+
+</script>
+
+<template>
+  <el-header class="header">
+    <h1>GN 聊天室</h1>
+    <div v-if="logined">
+      欢迎你！{{ username }}
+    </div>
+
+    <el-row v-if="!logined">
+      <el-col :span="5">
+        用户名：
+        <el-input :disabled="logined" v-model="username_input" placeholder="请输入用户名" />
+      </el-col>
+      <el-col>
+        <button :disabled="logined" type="default" @click.stop="user_login"> 登录 </button>
+      </el-col>
+    </el-row>
+
+  </el-header>
+
+  <el-main v-show="logined">
+
+    <el-row class="msg-container">
+      <el-col :span="24">
+        <el-scrollbar height="500px" id="scrollbar" ref="scrollbarRef">
+          <el-row v-for="msg of msg_list" style="margin-bottom: 10px">
+          <Message :name="msg.owner_name" :msg-body="msg.content" :msg-type="msg.is_picture"
+            :is-self="msg.is_self" />
+          </el-row>
+        </el-scrollbar>
+      </el-col>
+    </el-row>
+
+    <el-row>
+      <el-col :span="8">
+        <el-input @keyup.enter.native.stop="send_message" v-model="msg_input" clearable />
+      </el-col>
+
+      <el-col :span="2">
+        <el-button type="primary" @click.stop="send_message"> 发送 </el-button>
+      </el-col>
+
+      <el-col :span="2">
+        <el-button type="default" @click.stop="get_history_message"> 获取历史消息 </el-button>
+      </el-col>
+
+    </el-row>
+
+  </el-main>
+</template>
+
+<style scoped>
+.header .h1 {
+  font-weight: bold;
+}
+.msg-container {
+  width: 80%
+}
+</style>
