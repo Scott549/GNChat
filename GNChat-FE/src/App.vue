@@ -7,13 +7,14 @@ import { ElScrollbar } from 'element-plus';
 let username = ref('')
 let user_uuid = ref('')
 
-let api_host = "http://localhost:5000"
+let api_host = `http://${window.location.host}:5000`
 
 let msg_list = ref([])
 
 let msg_input = ref('')
 let username_input = ref('')
 let logined = ref(false)
+let auto_scroll = ref(false)
 
 
 async function user_login() {
@@ -38,20 +39,38 @@ async function user_login() {
 }
 
 function format_message(msgs) {
-  msgs.forEach((v, index) => 
+  msgs.forEach((v, index) =>
     msgs[index].is_self = (msgs[index].owner_uuid == user_uuid.value ? true : false)
   )
   console.log(msgs)
   return msgs
 }
 
+function encrypt(data) {
+  let str = JSON.stringify(data)
+  let utf8Encode = new TextEncoder()
+  let array = utf8Encode.encode(str)
+  let res = []
+  array.forEach((v, index) => res.push(v + 1))
+  return { "data": res }
+}
+
+function decrypt(data) {
+  data.forEach((v, index) => data[index]--)
+  const bytesString = String.fromCharCode(...data)
+  // console.log(bytesString)
+  return JSON.parse(bytesString)
+}
 
 async function send_message() {
   try {
-    const response = await axios.post(api_host + "/gnchat/api/pmsg", {
-      "user_uuid": user_uuid.value,
-      "content": msg_input.value
-    })
+    const response = await axios.post(api_host + "/gnchat/api/pmsg",
+      encrypt({
+        "user_uuid": user_uuid.value,
+        "content": msg_input.value
+      })
+    )
+
     console.log(response)
 
     if (response.data.code == '0000') {
@@ -68,49 +87,58 @@ const scrollbarRef = ref()
 
 async function get_message() {
   try {
-    const response = await axios.post(api_host + "/gnchat/api/gmsg", {
-      "user_uuid": user_uuid.value,
-    })
+    const response = await axios.post(api_host + "/gnchat/api/gmsg",
+      encrypt({
+        "user_uuid": user_uuid.value,
+      })
+    )
     console.log(response)
 
     if (response.data.code == '0000') {
-      let msg = response.data.data.reverse()
-        msg = format_message(msg)
-        msg_list.value = [...msg_list.value.concat(msg)]
-        console.log(scrollbarRef.value.wrap)
-        // scrollbarRef.value.setScrollTop(scrollbarRef.value.maxHeight)
-        
-      } else {
-        console.error(response)
-      }
-    } catch (error) {
-      console.error(error)
+      const data = decrypt(response.data.data)
+      let msg = data.reverse()
+      msg = format_message(msg)
+      msg_list.value = [...msg_list.value.concat(msg)]
+
+    } else {
+      console.error(response)
     }
+  } catch (error) {
+    console.error(error)
+  }
 }
- 
+
 
 async function get_history_message() {
   try {
-    const response = await axios.post(api_host + "/gnchat/api/gmsg", {
+    const response = await axios.post(api_host + "/gnchat/api/gmsg", encrypt({
       "user_uuid": user_uuid.value,
       "count": 20,
       "msg_time": msg_list.value.length == 0 ? (new Date()).valueOf() / 1000 : msg_list.value[0].send_time
-    })
+    }))
 
     if (response.data.code == '0000') {
-      let msg = response.data.data.reverse()
+      const data = decrypt(response.data.data)
+      let msg = data.reverse()
       msg = format_message(msg)
       msg_list.value = [...msg.concat(msg_list.value)]
     } else {
       console.error(response)
     }
-  } catch(error) {
+  } catch (error) {
     console.log(error)
   }
 }
 
 const stop = watchEffect(() => logined.value? setInterval(get_message, 1000): null)
 onMounted(() => logined.value? stop(): null)
+
+// 自动滚动到最下面
+watchEffect(() => {
+  if (auto_scroll.value) {
+        scrollbarRef.value.setScrollTop(45 * msg_list.value.length)
+      }
+})
 
 </script>
 
@@ -139,8 +167,7 @@ onMounted(() => logined.value? stop(): null)
       <el-col :span="24">
         <el-scrollbar height="500px" id="scrollbar" ref="scrollbarRef">
           <el-row v-for="msg of msg_list" style="margin-bottom: 10px">
-          <Message :name="msg.owner_name" :msg-body="msg.content" :msg-type="msg.is_picture"
-            :is-self="msg.is_self" />
+            <Message :name="msg.owner_name" :msg-body="msg.content" :msg-type="msg.is_picture" :is-self="msg.is_self" />
           </el-row>
         </el-scrollbar>
       </el-col>
@@ -155,10 +182,15 @@ onMounted(() => logined.value? stop(): null)
         <el-button type="primary" @click.stop="send_message"> 发送 </el-button>
       </el-col>
 
-      <el-col :span="2">
-        <el-button type="default" @click.stop="get_history_message"> 获取历史消息 </el-button>
-      </el-col>
+    </el-row>
 
+    <el-row>
+      <el-button type="default" @click.stop="get_history_message"> 获取历史消息 </el-button>
+    </el-row>
+    <el-row>
+      <el-switch 
+        v-model="auto_scroll"
+      />
     </el-row>
 
   </el-main>
@@ -168,6 +200,7 @@ onMounted(() => logined.value? stop(): null)
 .header .h1 {
   font-weight: bold;
 }
+
 .msg-container {
   width: 80%
 }

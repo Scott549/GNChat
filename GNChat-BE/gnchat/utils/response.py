@@ -3,6 +3,8 @@ from enum import Enum
 
 from flask import Response
 
+from gnchat.utils.encrypt import encrypt
+
 CODE_MESSAGE_MAP = {
     "0000": "ok",
     "0001": "bad request",

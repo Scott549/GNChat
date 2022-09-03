@@ -1,5 +1,4 @@
 import json
-import logging
 
 from gnchat.utils.gnexcept import GNException
 from gnchat.main.blueprint import main_blueprint

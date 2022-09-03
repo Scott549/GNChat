@@ -7,6 +7,7 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from gnchat.utils.encrypt import decrypt, encrypt
 from gnchat.utils.formatter import data_formatter
 from gnchat.utils.gnexcept import GNException
 from gnchat.utils.wrapper import response_wraps
@@ -19,7 +20,7 @@ from gnchat.utils.uuid_utils import get_uuid
 @main_blueprint.route("/pmsg", methods=['POST'])
 @response_wraps
 def send_message():
-    data = json.loads(request.data.decode('utf-8'))
+    data = decrypt(request.data)
     user_uuid = data.get('user_uuid', None)
     is_picture = data.get('is_picture', False)
     content = data.get('content', None)
@@ -39,14 +40,14 @@ def send_message():
             send_time=datetime.utcnow()
         )
     )
-    return {"message_uuid": message_uuid}
+    return encrypt({"message_uuid": message_uuid})
 
 
 @main_blueprint.route("/gmsg", methods=['POST'])
 @response_wraps
 def get_message():
-    data = json.loads(request.data.decode('utf-8'))
-    print("Request data is: {}".format(data))
+    data = decrypt(request.data)
+    # print("Request data is: {}".format(data))
     user_uuid = data.get('user_uuid', None)
 
     if not user_uuid:
@@ -76,4 +77,4 @@ def get_message():
         ).order_by(text("-send_time")).limit(count).all()
 
     print("Message list length: {}".format(len(message_list)))
-    return message_list
+    return encrypt(message_list)

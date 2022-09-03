@@ -19,6 +19,7 @@ defineProps(['name', 'msgBody', 'msgType', 'isSelf'])
   padding-right: 20px;
   margin: 0 auto;
   width: 100%;
+  height: 45px;
 }
 
 .msg-self {
